@@ -255,10 +255,10 @@ def fetch_github_data_for_user(state, city, filename, username):
 
 
 def write_user_data(state, city, filename, record):
-    state_path = os.path.join('users', state)
-    city_path = os.path.join(state_path, city)
-    file_path = os.path.join(city_path, filename)
+    dir_path = os.path.join('users', state, city)
+    file_path = os.path.join(dir_path, filename)
 
+    os.makedirs(dir_path, exist_ok=True)
     file_exists = os.path.isfile(file_path)
 
     print(record)
