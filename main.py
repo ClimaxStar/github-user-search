@@ -86,7 +86,7 @@ def fetch_github_accounts_from_city(state, city, start_date, end_date, page=1):
 
         while 'items' not in data:
             logging.error("[ACCOUNT] Exceed the github api limitiation")
-            time.sleep(600)
+            time.sleep(120)
             response = requests.get(url)
             data = response.json()
 
@@ -175,9 +175,10 @@ def fetch_github_data_for_user(state, city, filename, username):
         initialData = initialResponse.json()
         
         while 'login' not in initialData:
-            logging.error("[USER-Initial] Exceed the github api limitiation")
+            print(f"[USER-Initial] Exceed the github api limitiation while fetching data for [{username}]")
+            logging.error(f"[USER-Initial] Exceed the github api limitiation while fetching data for [{username}]")
             logging.error(json.dumps(initialData))
-            time.sleep(600)
+            time.sleep(120)
             initialResponse = requests.get(url)
             initialData = initialResponse.json()
 
@@ -210,9 +211,10 @@ def fetch_github_data_for_user(state, city, filename, username):
         socialData = socialResponse.json()
 
         while not isinstance(socialData, list):
-            logging.error("[USER-Social] Exceed the github api limitiation")
+            print(f"[USER-Social] Exceed the github api limitiation while fetching data for [{username}]")
+            logging.error(f"[USER-Social] Exceed the github api limitiation while fetching data for [{username}]")
             logging.error(json.dumps(socialData))
-            time.sleep(600)
+            time.sleep(120)
             socialResponse = requests.get(url)
             socialData = socialResponse.json()
 
@@ -231,9 +233,10 @@ def fetch_github_data_for_user(state, city, filename, username):
         emailData = emailResponse.json()
 
         while not isinstance(emailData, list):
-            logging.error("[USER-Email] Exceed the github api limitiation")
+            print(f"[USER-Email] Exceed the github api limitiation while fetching data for [{username}]")
+            logging.error(f"[USER-Email] Exceed the github api limitiation while fetching data for [{username}]")
             logging.error(json.dumps(emailData))
-            time.sleep(600)
+            time.sleep(120)
             emailResponse = requests.get(url)
             emailData = emailResponse.json()
 
@@ -247,11 +250,13 @@ def fetch_github_data_for_user(state, city, filename, username):
             emailString += mail + ', '
 
         record['email'] = emailString[:-2]
+
+        logging.info(f"User data collected successfully for [{username}]")
         write_user_data(state, city, filename, record)
 
     except Exception as e:
-        logging.error(f"Error fetching GitHub data for {username}: {e}")
-        print(f"Error fetching GitHub data for {username}: {e}")
+        logging.error(f"Error fetching GitHub data for [{username}]: {e}")
+        print(f"Error fetching GitHub data for [{username}]: {e}")
 
 
 def write_user_data(state, city, filename, record):
