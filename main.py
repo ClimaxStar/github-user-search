@@ -4,6 +4,7 @@ from datetime import datetime
 import time
 import os
 import logging
+import json
 
 logging.basicConfig(filename='error.log', level=logging.ERROR,
                     format='%(asctime)s %(levelname)s:%(message)s')
@@ -63,11 +64,10 @@ states = [
 
 
 def fetch_github_accounts_from_state(state_name, start_date, end_date):
-    file_path = 'states/'+state_name+'.csv'
+    file_path = 'states/' + state_name + '.csv'
     try:
         df = pd.read_csv(file_path)
         cities = df['city_state_short'].dropna().str.strip().tolist()
-        os.makedirs('accounts/'+state_name, exist_ok=True)
         for city in cities:
             fetch_github_accounts_from_city(state_name, city, start_date, end_date)
     except Exception as e:
@@ -85,9 +85,8 @@ def fetch_github_accounts_from_city(state, city, start_date, end_date, page=1):
         data = response.json()
 
         while 'items' not in data:
-            logging.error(f"Exceed the github api limitiation")
+            logging.error("[ACCOUNT] Exceed the github api limitiation")
             time.sleep(600)
-            url = f"https://api.github.com/search/users?q=created:{start_date.strftime('%Y-%m-%d')}..{end_date.strftime('%Y-%m-%d')} location:\"{city}\" type:user&per_page={per_page}&page={page}"
             response = requests.get(url)
             data = response.json()
 
@@ -97,7 +96,7 @@ def fetch_github_accounts_from_city(state, city, start_date, end_date, page=1):
             'Profile URL': item['html_url'],
         } for item in data.get('items', [])]
 
-        write_accounts_data(state, start_date, end_date, city,  records)
+        write_accounts_data(state, city, start_date, end_date, records)
 
         total_count = data.get('total_count', 0)
         if page * per_page < total_count:
@@ -107,13 +106,26 @@ def fetch_github_accounts_from_city(state, city, start_date, end_date, page=1):
         print(f"Error fetching GitHub data for {city}: {e}")
 
 
-def write_accounts_data(state, start_date, end_date, city, records):
-    file_name = f"{city}-{start_date.strftime('%Y-%m-%d')}-{end_date.strftime('%Y-%m-%d')}.csv"
-    directory_path = os.path.join('accounts', state)
-    file_path = os.path.join(directory_path, file_name)
+def write_accounts_data(state, city, start_date, end_date, records):
+    filename = f"{start_date.strftime('%Y-%m-%d')}-{end_date.strftime('%Y-%m-%d')}.csv"
+    dir_path = os.path.join('accounts', state, city)
+    file_path = os.path.join(dir_path, filename)
 
-    os.makedirs(directory_path, exist_ok=True)
+    os.makedirs(dir_path, exist_ok=True)
     print(state, city, start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'), len(records))
+
+    data = {
+        "state": state,
+        "city": city,
+        "start_date": start_date.strftime('%Y-%m-%d'),
+        "end_date": end_date.strftime('%Y-%m-%d'),
+        "count": len(records)
+    }
+    st = pd.DataFrame([data])
+    if os.path.isfile('account_count.csv'):
+        st.to_csv('account_count.csv', index=False, mode='a', header=False, encoding='utf-8')
+    else:
+        st.to_csv('account_count.csv', index=False, mode='w', header=True, encoding='utf-8')
 
     columns = ['username', 'User ID', 'Profile URL']
 
@@ -129,42 +141,43 @@ def write_accounts_data(state, start_date, end_date, city, records):
 
 
 def fetch_github_users_from_state(state_name, start_date, end_date):
-    file_path = 'states/'+state_name+'.csv'
+    file_path = 'states/' + state_name + '.csv'
     try:
         df = pd.read_csv(file_path)
         cities = df['city_state_short'].dropna().str.strip().tolist()
-        os.makedirs('users/'+state_name, exist_ok=True)
         for city in cities:
             fetch_github_users_from_city(state_name, city, start_date, end_date)
     except Exception as e:
         logging.error(f"Error reading CSV file: states/{state_name}.csv")
         print(f"Error reading CSV file: {e}")
 
+
 def fetch_github_users_from_city(state_name, city, start_date, end_date):
-    file_name = f"{city}-{start_date.strftime('%Y-%m-%d')}-{end_date.strftime('%Y-%m-%d')}.csv"
-    directory_path = os.path.join('accounts', state_name)
-    file_path = os.path.join(directory_path, file_name)
+    filename = f"{start_date.strftime('%Y-%m-%d')}-{end_date.strftime('%Y-%m-%d')}.csv"
+    state_path = os.path.join('accounts', state_name)
+    city_path = os.path.join(state_path, city)
+    file_path = os.path.join(city_path, filename)
     try:
         df = pd.read_csv(file_path)
         accounts = df['username'].dropna().str.strip().tolist()
         for account in accounts:
-            fetch_github_data_for_user(state_name, file_name, account)
+            fetch_github_data_for_user(state_name, city, filename, account)
     except Exception as e:
         logging.error(f"Error reading CSV file: states/{state_name}.csv")
         print(f"Error reading CSV file: {e}")
 
 
-def fetch_github_data_for_user(state, filename, username):
+def fetch_github_data_for_user(state, city, filename, username):
     try:
         url = f"https://api.github.com/users/{username}"
-        time.sleep(4)
+        time.sleep(3)
         initialResponse = requests.get(url)
         initialData = initialResponse.json()
         
         while 'login' not in initialData:
-            logging.error(f"Exceed the github api limitiation")
+            logging.error("[USER-Initial] Exceed the github api limitiation")
+            logging.error(json.dumps(initialData))
             time.sleep(600)
-            url = f"https://api.github.com/users/{username}"
             initialResponse = requests.get(url)
             initialData = initialResponse.json()
 
@@ -192,9 +205,16 @@ def fetch_github_data_for_user(state, filename, username):
 
         url = f"https://api.github.com/users/{username}/social_accounts"
 
-        time.sleep(4)
+        time.sleep(3)
         socialResponse = requests.get(url)
         socialData = socialResponse.json()
+
+        while not isinstance(socialData, list):
+            logging.error("[USER-Social] Exceed the github api limitiation")
+            logging.error(json.dumps(socialData))
+            time.sleep(600)
+            socialResponse = requests.get(url)
+            socialData = socialResponse.json()
 
         for social in socialData:
             if(social['provider'] == 'generic'):
@@ -206,9 +226,17 @@ def fetch_github_data_for_user(state, filename, username):
 
         url = f"https://api.github.com/users/{username}/events/public"
 
-        time.sleep(4)
+        time.sleep(3)
         emailResponse = requests.get(url)
         emailData = emailResponse.json()
+
+        while not isinstance(emailData, list):
+            logging.error("[USER-Email] Exceed the github api limitiation")
+            logging.error(json.dumps(emailData))
+            time.sleep(600)
+            emailResponse = requests.get(url)
+            emailData = emailResponse.json()
+
         emailString = ""
 
         final=set()
@@ -219,15 +247,18 @@ def fetch_github_data_for_user(state, filename, username):
             emailString += mail + ', '
 
         record['email'] = emailString[:-2]
-        write_user_data(state, filename, record)
+        write_user_data(state, city, filename, record)
 
     except Exception as e:
         logging.error(f"Error fetching GitHub data for {username}: {e}")
         print(f"Error fetching GitHub data for {username}: {e}")
 
 
-def write_user_data(state, filename, record):
-    file_path = f'users/{state}/{filename}.csv'
+def write_user_data(state, city, filename, record):
+    state_path = os.path.join('users', state)
+    city_path = os.path.join(state_path, city)
+    file_path = os.path.join(city_path, filename)
+
     file_exists = os.path.isfile(file_path)
 
     print(record)
@@ -316,8 +347,11 @@ def main():
             end_date = "2023-12-31"
             break
         elif validate_date(endDateInput):
-            end_date = endDateInput
-            break
+            if datetime.strptime(start_date, '%Y-%m-%d') <= datetime.strptime(endDateInput, '%Y-%m-%d'):
+                end_date = endDateInput
+                break
+            else:
+                print("End date should be greater than or equal to start date.")
         else:
             print("Invalid date format. Please enter the date in 'YYYY-MM-DD' format.")
 
@@ -332,12 +366,8 @@ def main():
 
     if state == "all":
         for state_name in states:
-            if city == "all":
-                fetch_github_accounts_from_state(state_name, start_date, end_date)
-                fetch_github_users_from_state(state_name, start_date, end_date)
-            else:
-                fetch_github_accounts_from_city(state_name, city, start_date, end_date)
-                fetch_github_users_from_city(state_name, city, start_date, end_date)
+            fetch_github_accounts_from_state(state_name, start_date, end_date)
+            fetch_github_users_from_state(state_name, start_date, end_date)
     else:
         if city == "all":
             fetch_github_accounts_from_state(state, start_date, end_date)
