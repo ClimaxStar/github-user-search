@@ -1,10 +1,12 @@
 import pandas as pd
 import requests
-import csv
-from datetime import datetime, timedelta
+from datetime import datetime
 import time
 import os
-import argparse
+import logging
+
+logging.basicConfig(filename='error.log', level=logging.ERROR,
+                    format='%(asctime)s %(levelname)s:%(message)s')
 
 states = [
     'Alabama',
@@ -60,35 +62,34 @@ states = [
 ]
 
 
-def process_cities_from_csv(state_name, start_date, end_date):
-
+def fetch_github_accounts_from_state(state_name, start_date, end_date):
     file_path = 'states/'+state_name+'.csv'
     try:
         df = pd.read_csv(file_path)
         cities = df['city_state_short'].dropna().str.strip().tolist()
-        os.makedirs('username/'+state_name, exist_ok=True)
+        os.makedirs('accounts/'+state_name, exist_ok=True)
         for city in cities:
-            fetch_github_users_for_all_dates(state_name, city, start_date, end_date)
+            fetch_github_accounts_from_city(state_name, city, start_date, end_date)
     except Exception as e:
+        logging.error(f"Error reading CSV file: states/{state_name}.csv")
         print(f"Error reading CSV file: {e}")
 
-def fetch_github_users_for_all_dates(state, city, start_date, end_date):
-    current_date = start_date
 
-    while current_date <= end_date:
-        fetch_github_users(state, city, current_date)
-        current_date = current_date + timedelta(days=31) 
-
-def fetch_github_users(state, city, current_date, page=1):
+def fetch_github_accounts_from_city(state, city, start_date, end_date, page=1):
     try:
-        from_date = current_date.strftime('%Y-%m-%d')
-        to_date = (current_date + timedelta(days=30)).strftime('%Y-%m-%d')
         per_page = 100
-        url = f"https://api.github.com/search/users?q=created:{from_date}..{to_date} location:\"{city}\" type:user&per_page={per_page}&page={page}"
+        url = f"https://api.github.com/search/users?q=created:{start_date.strftime('%Y-%m-%d')}..{end_date.strftime('%Y-%m-%d')} location:\"{city}\" type:user&per_page={per_page}&page={page}"
         
         time.sleep(3)
         response = requests.get(url)
         data = response.json()
+
+        while 'items' not in data:
+            logging.error(f"Exceed the github api limitiation")
+            time.sleep(600)
+            url = f"https://api.github.com/search/users?q=created:{start_date.strftime('%Y-%m-%d')}..{end_date.strftime('%Y-%m-%d')} location:\"{city}\" type:user&per_page={per_page}&page={page}"
+            response = requests.get(url)
+            data = response.json()
 
         records = [{
             'username': item['login'],
@@ -96,53 +97,76 @@ def fetch_github_users(state, city, current_date, page=1):
             'Profile URL': item['html_url'],
         } for item in data.get('items', [])]
 
-        write_username_data(state, current_date.year, current_date.month, city,  records)
+        write_accounts_data(state, start_date, end_date, city,  records)
 
         total_count = data.get('total_count', 0)
         if page * per_page < total_count:
-            fetch_github_users(state, city, current_date, page + 1)
+            fetch_github_accounts_from_city(state, city, start_date, end_date, page + 1)
     except Exception as e:
+        logging.error(f"Error fetching GitHub data for {city}: {e}")
         print(f"Error fetching GitHub data for {city}: {e}")
 
-def write_username_data(state, year, month, city, records):
-    file_path = 'username/' + state + '/'+ str(year) + '.' + str(month) + '.csv'
-    file_exists = os.path.isfile(file_path)
 
-    print(state, city, str(year) + '.' + str(month), len(records) )
+def write_accounts_data(state, start_date, end_date, city, records):
+    file_name = f"{city}-{start_date.strftime('%Y-%m-%d')}-{end_date.strftime('%Y-%m-%d')}.csv"
+    directory_path = os.path.join('accounts', state)
+    file_path = os.path.join(directory_path, file_name)
 
-    with open(file_path, mode='a', newline='') as file:
-        writer = csv.DictWriter(file, fieldnames=['username', 'User ID', 'Profile URL'])
-        
-        if not file_exists:
-            writer.writeheader()
+    os.makedirs(directory_path, exist_ok=True)
+    print(state, city, start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'), len(records))
 
-        for record in records:
-            writer.writerow(record)
+    columns = ['username', 'User ID', 'Profile URL']
+
+    if not records:
+        df = pd.DataFrame(columns=columns)
+        df.to_csv(file_path, index=False, mode='w', header=True, encoding='utf-8')
+    else:
+        df = pd.DataFrame(records)
+        if os.path.isfile(file_path):
+            df.to_csv(file_path, index=False, mode='a', header=False, encoding='utf-8')
+        else:
+            df.to_csv(file_path, index=False, mode='w', header=True, encoding='utf-8')
 
 
-def process_usernames_from_csv(state, start_date, end_date):
-    current_date = start_date
+def fetch_github_users_from_state(state_name, start_date, end_date):
+    file_path = 'states/'+state_name+'.csv'
+    try:
+        df = pd.read_csv(file_path)
+        cities = df['city_state_short'].dropna().str.strip().tolist()
+        os.makedirs('users/'+state_name, exist_ok=True)
+        for city in cities:
+            fetch_github_users_from_city(state_name, city, start_date, end_date)
+    except Exception as e:
+        logging.error(f"Error reading CSV file: states/{state_name}.csv")
+        print(f"Error reading CSV file: {e}")
 
-    while current_date <= end_date:
-        file_path = 'username/'+ state + '/' + str(current_date.year) + '.' + str(current_date.month) +'.csv'
-        try:
-            df = pd.read_csv(file_path)
-            usernames = df['username'].dropna().str.strip().tolist()
-            os.makedirs('result/'+state, exist_ok=True)
-            for username in usernames:
-                fetch_github_data_for_user(state, str(current_date.year) + '.' + str(current_date.month), username)
-        except Exception as e:
-            print(f"Error reading CSV file: {e}")
-        current_date = current_date + timedelta(days=31) 
+def fetch_github_users_from_city(state_name, city, start_date, end_date):
+    file_name = f"{city}-{start_date.strftime('%Y-%m-%d')}-{end_date.strftime('%Y-%m-%d')}.csv"
+    directory_path = os.path.join('accounts', state_name)
+    file_path = os.path.join(directory_path, file_name)
+    try:
+        df = pd.read_csv(file_path)
+        accounts = df['username'].dropna().str.strip().tolist()
+        for account in accounts:
+            fetch_github_data_for_user(state_name, file_name, account)
+    except Exception as e:
+        logging.error(f"Error reading CSV file: states/{state_name}.csv")
+        print(f"Error reading CSV file: {e}")
+
 
 def fetch_github_data_for_user(state, filename, username):
     try:
         url = f"https://api.github.com/users/{username}"
-        
         time.sleep(4)
         initialResponse = requests.get(url)
         initialData = initialResponse.json()
-        print(initialData)
+        
+        while 'login' not in initialData:
+            logging.error(f"Exceed the github api limitiation")
+            time.sleep(600)
+            url = f"https://api.github.com/users/{username}"
+            initialResponse = requests.get(url)
+            initialData = initialResponse.json()
 
         record = {
             'username': initialData['login'],
@@ -185,7 +209,6 @@ def fetch_github_data_for_user(state, filename, username):
         time.sleep(4)
         emailResponse = requests.get(url)
         emailData = emailResponse.json()
-
         emailString = ""
 
         final=set()
@@ -196,54 +219,109 @@ def fetch_github_data_for_user(state, filename, username):
             emailString += mail + ', '
 
         record['email'] = emailString[:-2]
-
-        write_all_data(state, filename, record)
+        write_user_data(state, filename, record)
 
     except Exception as e:
+        logging.error(f"Error fetching GitHub data for {username}: {e}")
         print(f"Error fetching GitHub data for {username}: {e}")
 
-def write_all_data(state, filename, record):
-    file_path = 'result/' + state + '/'+ filename + '.csv'
+
+def write_user_data(state, filename, record):
+    file_path = f'users/{state}/{filename}.csv'
     file_exists = os.path.isfile(file_path)
 
     print(record)
 
-    with open(file_path, mode='a', newline='', encoding='utf-8') as file:
-        writer = csv.DictWriter(file, fieldnames=[
-            'username', 'name', 'company', 'blog', 'location', 'email', 'bio', 'facebook', 'instagram', 'linkedin'
-            , 'npm', 'reddit', 'twitch', 'youtube', 'mastodon', 'hometown', 'twitter', 'generic', 'created_at'])
-        
-        if not file_exists:
-            writer.writeheader()
+    df = pd.DataFrame([record])
 
-        writer.writerow(record)
+    columns = [
+        'username', 'name', 'company', 'blog', 'location', 'email', 'bio', 'facebook', 'instagram', 'linkedin',
+        'npm', 'reddit', 'twitch', 'youtube', 'mastodon', 'hometown', 'twitter', 'generic', 'created_at'
+    ]
 
-def get_all_file_names(directory):
+    if file_exists:
+        df.to_csv(file_path, mode='a', header=False, index=False, columns=columns, encoding='utf-8')
+    else:
+        df.to_csv(file_path, mode='w', header=True, index=False, columns=columns, encoding='utf-8')
+
+
+def validate_date(date_str):
     try:
-        file_names = os.listdir(directory)
-        files = [f for f in file_names if os.path.isfile(os.path.join(directory, f))]
-        return files
-    except Exception as e:
-        print(f"Error: {e}")
-        return []
+        parsed_date = datetime.strptime(date_str, '%Y-%m-%d')
+        formatted_date = parsed_date.strftime('%Y-%m-%d')
+        return date_str == formatted_date
+    except ValueError:
+        return False
+
+
+def validate_city(state, city):
+    try:
+        df = pd.read_csv(f"states/{state}.csv")
+        if city in df['city_state_short'].values:
+            return True
+    except FileNotFoundError:
+        print(f"CSV file for {state} not found.")
+    return False
+
 
 def main():
+    # State input with validation
+    while True:
+        stateInput = input(f"Enter State Name or press Enter for 'all': ")
+        if stateInput == "":
+            state = "all"
+            break
+        elif stateInput in states:
+            state = stateInput
+            break
+        else:
+            print(f"Invalid input. Please enter correct state name.")
 
-    stateInput = input("Enter State Name: ")
-    state = stateInput if stateInput!="" else "all"
     print("State: ", state)
 
-    startDateInput = input("Enter Start Date (YYYY-MM-DD): ")
-    start_date = startDateInput if startDateInput!="" else "2014-01-01"
+    # City input with validation
+    if state != "all":
+        while True:
+            cityInput = input(f"Enter City Name or press Enter for 'all': ")
+            if cityInput == "":
+                city = "all"
+                break
+            elif validate_city(state, cityInput):
+                city = cityInput
+                break
+            else:
+                print(f"Invalid input. Please enter correct city name")
+    else:
+        city = "all"
+    print("City Name: ", city)
+
+    # Start date input with validation
+    while True:
+        startDateInput = input("Enter Start Date (YYYY-MM-DD) or press Enter for '2014-01-01': ")
+        if startDateInput == "":
+            start_date = "2014-01-01"
+            break
+        elif validate_date(startDateInput):
+            start_date = startDateInput
+            break
+        else:
+            print("Invalid date format. Please enter the date in 'YYYY-MM-DD' format.")
+
     print("Start Date: ", start_date)
 
-    endDateInput = input("Enter End Date (YYYY-MM-DD): ")
-    end_date = endDateInput if endDateInput!="" else "2023-12-31"
-    print("End Date: ", end_date)
+    # End date input with validation
+    while True:
+        endDateInput = input("Enter End Date (YYYY-MM-DD) or press Enter for '2023-12-31': ")
+        if endDateInput == "":
+            end_date = "2023-12-31"
+            break
+        elif validate_date(endDateInput):
+            end_date = endDateInput
+            break
+        else:
+            print("Invalid date format. Please enter the date in 'YYYY-MM-DD' format.")
 
-    cityInput = input("Enter City Name: ")
-    city = cityInput if cityInput!="" else "all"
-    print("City Name: ", city)
+    print("End Date: ", end_date)
 
     try:
         start_date = datetime.strptime(start_date, '%Y-%m-%d')
@@ -251,20 +329,23 @@ def main():
     except ValueError as e:
         print(f"Error: {e}")
         return
-    
-    if state == "all" :
+
+    if state == "all":
         for state_name in states:
             if city == "all":
-                process_cities_from_csv(state_name, start_date, end_date)
-            else :
-                fetch_github_users_for_all_dates(state_name, city, start_date, end_date)
-            process_usernames_from_csv(state_name, start_date, end_date)
+                fetch_github_accounts_from_state(state_name, start_date, end_date)
+                fetch_github_users_from_state(state_name, start_date, end_date)
+            else:
+                fetch_github_accounts_from_city(state_name, city, start_date, end_date)
+                fetch_github_users_from_city(state_name, city, start_date, end_date)
     else:
         if city == "all":
-            process_cities_from_csv(state, start_date, end_date)
-        else :
-            fetch_github_users_for_all_dates(state, city, start_date, end_date)
-        process_usernames_from_csv(state, start_date, end_date)
+            fetch_github_accounts_from_state(state, start_date, end_date)
+            fetch_github_users_from_state(state, start_date, end_date)
+        else:
+            fetch_github_accounts_from_city(state, city, start_date, end_date)
+            fetch_github_users_from_city(state, city, start_date, end_date)
+
 
 if __name__ == "__main__":
     main()
