@@ -85,7 +85,7 @@ def fetch_github_accounts_from_city(state, city, start_date, end_date, page=1):
         data = response.json()
 
         while 'items' not in data:
-            logging.error("[ACCOUNT] Exceed the github api limitiation")
+            logging.error(f"[ACCOUNT] Exceed the github api limitiation for [{state} - {city}]")
             time.sleep(120)
             response = requests.get(url)
             data = response.json()
@@ -102,8 +102,8 @@ def fetch_github_accounts_from_city(state, city, start_date, end_date, page=1):
         if page * per_page < total_count:
             fetch_github_accounts_from_city(state, city, start_date, end_date, page + 1)
     except Exception as e:
-        logging.error(f"Error fetching GitHub data for {city}: {e}")
-        print(f"Error fetching GitHub data for {city}: {e}")
+        logging.error(f"Error fetching GitHub data for [{state} - {city}]: {e}")
+        print(f"Error fetching GitHub data for [{state} - {city}]: {e}")
 
 
 def write_accounts_data(state, city, start_date, end_date, records):
