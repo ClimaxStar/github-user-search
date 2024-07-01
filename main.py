@@ -251,7 +251,7 @@ def fetch_github_data_for_user(state, city, filename, username):
 
         record['email'] = emailString[:-2]
 
-        logging.info(f"User data collected successfully for [{username}]")
+        logging.error(f"User data collected successfully for [{username}]")
         write_user_data(state, city, filename, record)
 
     except Exception as e:
