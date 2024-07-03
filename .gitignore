@@ -4,6 +4,7 @@
 /users/
 error.log
 account_count.csv
+config.json
 1.csv
 1.py
 2.csv
