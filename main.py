@@ -64,6 +64,41 @@ config_path = 'config.json'
 proxies = {}
 
 
+def validate_city(state, city):
+    try:
+        df = pd.read_csv(f"states/{state}.csv")
+        if city in df['city_state_short'].values:
+            return True
+    except FileNotFoundError:
+        print(f"CSV file for {state} not found.")
+    return False
+
+
+def is_leap_year(year):
+    if year % 400 == 0:
+        return 1
+    elif year % 100 == 0:
+        return 0
+    elif year % 4 == 0:
+        return 1
+    return 0
+
+
+def setup_logger(state, city):
+    dir_path = os.path.join('users', state, city)
+    os.makedirs(dir_path, exist_ok=True)
+    logger = logging.getLogger(f'{state}-{city}_logger')
+    logger.setLevel(logging.DEBUG)
+    log_file_path = os.path.join(dir_path, f"{state}-{city}.log")
+    file_handler = logging.FileHandler(log_file_path)
+    file_handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
+    return logger
+
+
 def fetch_github_data_from_state(state):
     file_path = 'states/' + state + '.csv'
     try:
@@ -97,21 +132,6 @@ def fetch_github_data_from_city(state, city):
             current_month += 1
 
     logger.handlers.clear()
-
-
-def setup_logger(state, city):
-    dir_path = os.path.join('users', state, city)
-    os.makedirs(dir_path, exist_ok=True)
-    logger = logging.getLogger(f'{state}-{city}_logger')
-    logger.setLevel(logging.DEBUG)
-    log_file_path = os.path.join(dir_path, f"{state}-{city}.log")
-    file_handler = logging.FileHandler(log_file_path)
-    file_handler.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
-
-    return logger
 
 
 def fetch_github_accounts(state, city, start_date, end_date, logger, page=1):
@@ -313,26 +333,6 @@ def save_user(state, city, filename, record):
         df.to_csv(file_path, mode='a', header=False, index=False, columns=columns, encoding='utf-8')
     else:
         df.to_csv(file_path, mode='w', header=True, index=False, columns=columns, encoding='utf-8')
-
-
-def validate_city(state, city):
-    try:
-        df = pd.read_csv(f"states/{state}.csv")
-        if city in df['city_state_short'].values:
-            return True
-    except FileNotFoundError:
-        print(f"CSV file for {state} not found.")
-    return False
-
-
-def is_leap_year(year):
-    if year % 400 == 0:
-        return 1
-    elif year % 100 == 0:
-        return 0
-    elif year % 4 == 0:
-        return 1
-    return 0
 
 
 def main():
