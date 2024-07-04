@@ -315,15 +315,6 @@ def save_user(state, city, filename, record):
         df.to_csv(file_path, mode='w', header=True, index=False, columns=columns, encoding='utf-8')
 
 
-def validate_date(date_str):
-    try:
-        parsed_date = datetime.strptime(date_str, '%Y-%m-%d')
-        formatted_date = parsed_date.strftime('%Y-%m-%d')
-        return date_str == formatted_date
-    except ValueError:
-        return False
-
-
 def validate_city(state, city):
     try:
         df = pd.read_csv(f"states/{state}.csv")
@@ -331,30 +322,6 @@ def validate_city(state, city):
             return True
     except FileNotFoundError:
         print(f"CSV file for {state} not found.")
-    return False
-
-
-def validate_proxy(proxy_name):
-    try:
-        global proxies
-        if not os.path.exists(config_path):
-            raise FileNotFoundError(f"The configuration file {config_path} does not exist.")
-        
-        config_data = []
-        with open(config_path, 'r') as config_file:
-            config_data = json.load(config_file)
-        
-        for config in config_data:
-            if config['name'] == proxy_name: 
-                proxies = {
-                    'http': f"http://{config['username']}:{config['password']}@{config['domain']}:{config['port']}",
-                    'https': f"http://{config['username']}:{config['password']}@{config['domain']}:{config['port']}"
-                }
-                return True
-    except FileNotFoundError as e:
-        print(e)
-    except json.JSONDecodeError as e:
-        print(f"Error decoding JSON: {e}")
     return False
 
 
@@ -369,6 +336,7 @@ def is_leap_year(year):
 
 
 def main():
+    global proxies
     # State input with validation
     while True:
         stateInput = input(f"Enter State Name or press Enter for 'all': ")
@@ -399,13 +367,21 @@ def main():
         city = "all"
     print("City Name: ", city)
 
-    # Proxy Name input with validation
-    while True:
-        proxyInput = input(f"Enter Proxy User Name : ")
-        if validate_proxy(proxyInput):
-            break
-        else:
-            print(f"Invalid input. Please enter correct city name")
+    # Set Proxy Information
+    if not os.path.exists(config_path):
+        print(f"The configuration file {config_path} does not exist.")
+        return
+    try:
+        with open(config_path, 'r') as config_file:
+            config = json.load(config_file)
+            proxies = {
+                'http': f"http://{config['username']}:{config['password']}@{config['domain']}:{config['port']}",
+                'https': f"http://{config['username']}:{config['password']}@{config['domain']}:{config['port']}"
+            }
+            print(proxies)
+    except Exception as e:
+        print(f"Error decoding JSON: {e}")
+        return
 
 
     if state == "all":
