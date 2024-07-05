@@ -5,7 +5,7 @@ import time
 import os
 import logging
 import json
-import shutil
+import re
 
 states = [
     'Alabama',
@@ -84,6 +84,20 @@ def is_leap_year(year):
     return 0
 
 
+def analyze_log_file(log_file_path):
+    success_count = 0
+    error_count = 0
+    
+    with open(log_file_path, 'r') as file:
+        for line in file:
+            if re.search(r'INFO - ', line):
+                success_count += 1
+            elif re.search(r'ERROR - ', line):
+                error_count += 1
+    
+    return success_count, error_count
+
+
 def setup_logger(state, city):
     dir_path = os.path.join('users', state, city)
     os.makedirs(dir_path, exist_ok=True)
@@ -130,7 +144,12 @@ def fetch_github_data_from_city(state, city):
             current_year -= 1
         else:
             current_month += 1
-
+    log_path = os.path.join('users', state, city, f"{state}-{city}.log")
+    success_count, error_count = analyze_log_file(log_path)
+    logger.debug(f"Number of Success: {success_count}")
+    logger.debug(f"Number of Error: {error_count}")
+    print(f"Number of Success: {success_count}")
+    print(f"Number of Error: {error_count}")
     logger.handlers.clear()
 
 
