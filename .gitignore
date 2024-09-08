@@ -2,6 +2,9 @@
 /accounts/
 /states/
 /users/
+/dist/
+/build/
+dist.rar
 error.log
 account_count.csv
 config.json
