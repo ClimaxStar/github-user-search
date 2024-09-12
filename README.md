@@ -3,7 +3,7 @@
 This project fetches user information from GitHub's public API based on specified states, cities, and date ranges. It retrieves user profiles and their social accounts, and it saves this data into CSV files.
 
 ## Table of Contents
- 
+
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
 - [Usage](#usage)
